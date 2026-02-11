@@ -7,10 +7,10 @@
 import { PHRASES, pick, getSlideRemark, getBlockEnergy } from './spiritPersonality'
 import { getPacingHint } from './spiritPacing'
 
-const BLACK = '#171717'
-const GRAY  = '#D4D4D4'
-const MUTED = '#737373'
-const RED   = '#DC2626'
+const BLACK = '#2D1B4E'
+const GRAY  = '#D4C5E8'
+const MUTED = '#8B7BA8'
+const RED   = '#C026D3'
 const WHITE = '#FFFFFF'
 
 // isometric projection helpers
@@ -25,8 +25,8 @@ const CONFIG = {
   voxelSize: 3,           // size of each voxel cube in px
   scale: 1.0,             // overall character scale
 
-  bubbleBackground: 'rgba(23,23,23,0.92)',
-  bubbleText: '#bbb',
+  bubbleBackground: 'rgba(45,27,78,0.92)',
+  bubbleText: '#D4C5E8',
   bubbleFontSize: 11,
   bubbleFontWeight: 400,
 
@@ -60,7 +60,7 @@ const CONFIG = {
 // Each voxel: [x, y, z, colorIndex]
 // colorIndex: 0=black, 1=gray, 2=red, 3=white, 4=dark-gray, 5=light-gray, 6=blush
 
-const COLORS = [BLACK, GRAY, RED, WHITE, '#333333', '#AAAAAA', 'rgba(220,38,38,0.5)']
+const COLORS = [BLACK, GRAY, RED, WHITE, '#3D2B5A', '#B8A8D0', 'rgba(192,38,211,0.5)']
 
 // growth: 0.0 (start) → 1.0 (end of presentation)
 // The character literally grows: taller body, crown branches, red aura, wider stance

@@ -53,6 +53,7 @@ export default function SlideRenderer({ slide }) {
     case 'recap': content = <RecapSlide s={slide} />; break;
     case 'voices': content = <VoicesSlide s={slide} />; break;
     case 'bigquote': content = <BigQuoteSlide s={slide} />; break;
+    case 'quote': content = <BigQuoteSlide s={slide} />; break;
     case 'content': content = <ContentSlide s={slide} />; break;
     case 'levels': content = <LevelsSlide s={slide} />; break;
     case 'definition': content = <DefinitionSlide s={slide} />; break;
@@ -508,6 +509,18 @@ function ContentSlide({ s }) {
             </li>
           ))}
         </ul>
+      )}
+      {s.download && (
+        <a
+          href={s.download.url}
+          download
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 mt-3 px-4 py-2 rounded-lg border border-swiss-red/30 bg-swiss-red/5 hover:bg-swiss-red/10 transition-colors text-swiss-red text-sm font-medium animate-fade-in animate-fade-in-delay-4"
+        >
+          <Download size={14} />
+          {s.download.label}
+        </a>
       )}
       {s.note && (
         <p className="text-swiss-muted text-xs mt-4 border-t border-swiss-gray pt-3">{s.note}</p>
