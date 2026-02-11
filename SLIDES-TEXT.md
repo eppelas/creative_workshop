@@ -1,7 +1,7 @@
-# W26 Workshop #4 — Life Engineering: Slide Texts
+# W26 AT04 — AI Creative: Архитектор Системы
+## Полный скрипт презентации
 
 > Edit texts here. Then tell Cascade: "забери тексты из SLIDES-TEXT.md"
-> Structure: slide ID in brackets, then fields. Don't change IDs or field names.
 
 ---
 
