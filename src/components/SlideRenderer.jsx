@@ -946,7 +946,7 @@ function ActivitySlide({ s }) {
       {s.goal && (
         <p className="text-swiss-black text-sm italic border-l-4 border-swiss-red/30 pl-4">{s.goal}</p>
       )}
-      <div className="grid gap-3">
+      {s.steps && <div className="grid gap-3">
         {s.steps.map((step, i) => (
           <div key={i} className={`flex items-start gap-4 p-4 rounded-lg border border-swiss-gray/50 bg-swiss-gray/5 animate-fade-in animate-fade-in-delay-${Math.min(i + 1, 5)}`}>
             <div className="flex flex-col items-center flex-shrink-0">
@@ -959,7 +959,7 @@ function ActivitySlide({ s }) {
             </div>
           </div>
         ))}
-      </div>
+      </div>}
     </div>
   )
 }
