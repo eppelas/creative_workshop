@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { margin: 0; overflow: hidden; background: #FFFFFF; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+    <script type="module">
+        import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xFFFFFF);
+
+        const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 500);
+        camera.position.set(12, 10, 16);
+        camera.lookAt(0, 3, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        // Colors
+        const BLACK = 0x171717;
+        const RED = 0xDC2626;
+        const GRAY = 0xD4D4D4;
+        const MUTED = 0x737373;
+
+        const blackMat = new THREE.MeshStandardMaterial({ color: BLACK, roughness: 0.8, metalness: 0.1 });
+        const redMat = new THREE.MeshStandardMaterial({ color: RED, roughness: 0.4, metalness: 0.2 });
+        const grayMat = new THREE.MeshStandardMaterial({ color: GRAY, roughness: 0.9, metalness: 0.05 });
+        const mutedMat = new THREE.MeshStandardMaterial({ color: MUTED, roughness: 0.7, metalness: 0.1 });
+
+        const vGeo = new THREE.BoxGeometry(1, 1, 1);
+
+        // The Builder figure
+        const figure = new THREE.Group();
+        function addV(x, y, z, mat = blackMat) {
+            const m = new THREE.Mesh(vGeo, mat);
+            m.position.set(x, y, z);
+            m.castShadow = true;
+            figure.add(m);
+        }
+
+        // Legs
+        addV(-0.5, 0, 0); addV(-0.5, 1, 0);
+        addV(0.5, 0, 0); addV(0.5, 1, 0);
+        // Torso
+        addV(0, 2, 0); addV(0, 3, 0); addV(0, 4, 0);
+        // Shoulders
+        addV(-1, 4, 0); addV(1, 4, 0);
+        // Arms
+        addV(-1, 3, 0); addV(-1, 2, 0.5);
+        addV(1, 3, 0); addV(1, 2, 0.5);
+        // Head
+        addV(0, 5, 0); addV(0, 6, 0, redMat);
+
+        scene.add(figure);
+
+        // Floating blocks being "assembled"
+        const floatingBlocks = [];
+        const blockPositions = [
+            { target: new THREE.Vector3(3, 0, 2), delay: 0 },
+            { target: new THREE.Vector3(4, 0, 2), delay: 0.5 },
+            { target: new THREE.Vector3(3, 1, 2), delay: 1.0 },
+            { target: new THREE.Vector3(4, 1, 2), delay: 1.5 },
+            { target: new THREE.Vector3(3, 2, 2), delay: 2.0 },
+            { target: new THREE.Vector3(4, 2, 2), delay: 2.5 },
+            { target: new THREE.Vector3(3, 0, 3), delay: 0.3 },
+            { target: new THREE.Vector3(4, 0, 3), delay: 0.8 },
+            { target: new THREE.Vector3(3, 1, 3), delay: 1.3 },
+            { target: new THREE.Vector3(4, 1, 3), delay: 1.8 },
+            { target: new THREE.Vector3(3.5, 3, 2.5), delay: 3.0 },
+            // Left side structure
+            { target: new THREE.Vector3(-3, 0, -1), delay: 0.2 },
+            { target: new THREE.Vector3(-3, 1, -1), delay: 0.7 },
+            { target: new THREE.Vector3(-3, 0, 0), delay: 1.1 },
+            { target: new THREE.Vector3(-3, 1, 0), delay: 1.6 },
+            { target: new THREE.Vector3(-3, 2, -0.5), delay: 2.2 },
+        ];
+
+        blockPositions.forEach(bp => {
+            const mat = bp.target.y > 2 ? redMat : (Math.random() > 0.7 ? mutedMat : grayMat);
+            const mesh = new THREE.Mesh(vGeo, mat);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            // Start from above
+            mesh.position.set(
+                bp.target.x + (Math.random() - 0.5) * 8,
+                bp.target.y + 15 + Math.random() * 10,
+                bp.target.z + (Math.random() - 0.5) * 8
+            );
+            scene.add(mesh);
+            floatingBlocks.push({
+                mesh,
+                target: bp.target,
+                delay: bp.delay,
+                arrived: false,
+                speed: 0.02 + Math.random() * 0.01
+            });
+        });
+
+        // No ground plane — pure white background merges seamlessly
+
+        // Lighting
+        const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambient);
+
+        const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+        sun.position.set(10, 20, 10);
+        sun.castShadow = true;
+        sun.shadow.mapSize.set(1024, 1024);
+        sun.shadow.camera.far = 50;
+        sun.shadow.camera.left = -15;
+        sun.shadow.camera.right = 15;
+        sun.shadow.camera.top = 15;
+        sun.shadow.camera.bottom = -15;
+        scene.add(sun);
+
+        const fill = new THREE.DirectionalLight(0xDCE8FF, 0.4);
+        fill.position.set(-10, 10, -5);
+        scene.add(fill);
+
+        // Small red particles
+        const particleCount = 40;
+        const pGeo = new THREE.BoxGeometry(0.15, 0.15, 0.15);
+        const particles = [];
+        for (let i = 0; i < particleCount; i++) {
+            const p = new THREE.Mesh(pGeo, redMat);
+            p.position.set(
+                (Math.random() - 0.5) * 12,
+                Math.random() * 12,
+                (Math.random() - 0.5) * 12
+            );
+            scene.add(p);
+            particles.push({
+                mesh: p,
+                vy: 0.01 + Math.random() * 0.02,
+                vx: (Math.random() - 0.5) * 0.01
+            });
+        }
+
+        // Animation
+        const clock = new THREE.Clock();
+        let angle = 0;
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const t = clock.getElapsedTime();
+
+            // Slow orbit (5x slower)
+            angle += 0.0006;
+            camera.position.x = Math.cos(angle) * 18;
+            camera.position.z = Math.sin(angle) * 18;
+            camera.position.y = 10 + Math.sin(t * 0.06) * 1;
+            camera.lookAt(0, 3, 0);
+
+            // Animate floating blocks
+            floatingBlocks.forEach(b => {
+                if (t < b.delay) return;
+                if (b.arrived) {
+                    b.mesh.position.y = b.target.y + Math.sin(t * 0.4 + b.delay) * 0.03;
+                    return;
+                }
+                const dir = new THREE.Vector3().subVectors(b.target, b.mesh.position);
+                const dist = dir.length();
+                if (dist < 0.1) {
+                    b.mesh.position.copy(b.target);
+                    b.arrived = true;
+                } else {
+                    dir.normalize().multiplyScalar(Math.min(b.speed * 0.2 * (1 + t * 0.06), dist));
+                    b.mesh.position.add(dir);
+                }
+            });
+
+            // Figure breathing (5x slower)
+            figure.position.y = Math.sin(t * 0.3) * 0.1;
+
+            // Particles rise (5x slower)
+            particles.forEach(p => {
+                p.mesh.position.y += p.vy * 0.2;
+                p.mesh.position.x += p.vx * 0.2;
+                p.mesh.rotation.x += 0.004;
+                p.mesh.rotation.z += 0.002;
+                if (p.mesh.position.y > 14) {
+                    p.mesh.position.y = -1;
+                    p.mesh.position.x = (Math.random() - 0.5) * 12;
+                    p.mesh.position.z = (Math.random() - 0.5) * 12;
+                }
+            });
+
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>

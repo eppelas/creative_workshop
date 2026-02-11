@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { margin: 0; overflow: hidden; background: #FFFFFF; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+    <script type="module">
+        import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xFFFFFF);
+
+        const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 500);
+        camera.position.set(16, 10, 16);
+        camera.lookAt(0, 3, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        const RED = 0xDC2626;
+        const BLACK = 0x171717;
+        const GRAY = 0xD4D4D4;
+        const MUTED = 0x737373;
+        const BLUE = 0x3B82F6;
+        const GREEN = 0x22C55E;
+        const AMBER = 0xF59E0B;
+        const PURPLE = 0x8B5CF6;
+
+        const mats = {
+            red: new THREE.MeshStandardMaterial({ color: RED, roughness: 0.4, metalness: 0.2 }),
+            black: new THREE.MeshStandardMaterial({ color: BLACK, roughness: 0.8, metalness: 0.1 }),
+            gray: new THREE.MeshStandardMaterial({ color: GRAY, roughness: 0.9, metalness: 0.05 }),
+            muted: new THREE.MeshStandardMaterial({ color: MUTED, roughness: 0.7, metalness: 0.1 }),
+            blue: new THREE.MeshStandardMaterial({ color: BLUE, roughness: 0.4, metalness: 0.15 }),
+            green: new THREE.MeshStandardMaterial({ color: GREEN, roughness: 0.4, metalness: 0.15 }),
+            amber: new THREE.MeshStandardMaterial({ color: AMBER, roughness: 0.4, metalness: 0.15 }),
+            purple: new THREE.MeshStandardMaterial({ color: PURPLE, roughness: 0.4, metalness: 0.15 }),
+        };
+
+        const vGeo = new THREE.BoxGeometry(1, 1, 1);
+
+        // Prism — central white beam splits into colored beams
+        // Central column (the "white light" input)
+        const prism = new THREE.Group();
+        function addV(x, y, z, mat) {
+            const m = new THREE.Mesh(vGeo, mat);
+            m.position.set(x, y, z);
+            m.castShadow = true;
+            prism.add(m);
+            return m;
+        }
+
+        // Prism body (triangular-ish shape)
+        addV(0, 0, 0, mats.black); addV(1, 0, 0, mats.black); addV(-1, 0, 0, mats.black);
+        addV(0, 0, 1, mats.black); addV(0, 0, -1, mats.black);
+        addV(0, 1, 0, mats.black); addV(1, 1, 0, mats.black); addV(-1, 1, 0, mats.black);
+        addV(0, 2, 0, mats.black); addV(0, 3, 0, mats.red);
+
+        scene.add(prism);
+
+        // 5 model towers around the prism — each a different "model" color
+        const towers = [];
+        const towerData = [
+            { x: -6, z: 0, mat: mats.blue, h: 5, label: 'GPT' },
+            { x: -3, z: -5, mat: mats.amber, h: 6, label: 'Claude' },
+            { x: 3, z: -5, mat: mats.green, h: 4, label: 'DeepSeek' },
+            { x: 6, z: 0, mat: mats.purple, h: 5, label: 'Gemini' },
+            { x: 0, z: 6, mat: mats.red, h: 7, label: 'Perplexity' },
+        ];
+
+        towerData.forEach(td => {
+            const group = new THREE.Group();
+            for (let y = 0; y < td.h; y++) {
+                const m = new THREE.Mesh(vGeo, y === td.h - 1 ? td.mat : mats.gray);
+                m.position.set(0, y, 0);
+                m.castShadow = true;
+                group.add(m);
+            }
+            // Top cap
+            const cap = new THREE.Mesh(vGeo, td.mat);
+            cap.position.set(0, td.h, 0);
+            cap.castShadow = true;
+            group.add(cap);
+            group.position.set(td.x, 0, td.z);
+            scene.add(group);
+            towers.push({ group, baseH: td.h, cap });
+        });
+
+        // Connection beams from prism to towers
+        const connGeo = new THREE.BoxGeometry(0.3, 0.3, 0.3);
+        const connections = [];
+        towerData.forEach((td, i) => {
+            const dir = new THREE.Vector3(td.x, td.h * 0.5, td.z).normalize();
+            for (let j = 1; j <= 6; j++) {
+                const m = new THREE.Mesh(connGeo, td.mat);
+                m.position.set(dir.x * j * 1.2, 2 + dir.y * j * 0.8, dir.z * j * 1.2);
+                scene.add(m);
+                connections.push({ mesh: m, basePos: m.position.clone(), phase: i + j * 0.4 });
+            }
+        });
+
+        // Particles
+        const particles = [];
+        const pGeo = new THREE.BoxGeometry(0.15, 0.15, 0.15);
+        for (let i = 0; i < 35; i++) {
+            const matArr = [mats.red, mats.blue, mats.green, mats.amber, mats.purple];
+            const p = new THREE.Mesh(pGeo, matArr[i % 5]);
+            p.position.set((Math.random() - 0.5) * 18, Math.random() * 12, (Math.random() - 0.5) * 18);
+            scene.add(p);
+            particles.push({ mesh: p, vy: 0.008 + Math.random() * 0.015 });
+        }
+
+        // Lighting
+        scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+        const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+        sun.position.set(10, 20, 10);
+        sun.castShadow = true;
+        sun.shadow.mapSize.set(1024, 1024);
+        scene.add(sun);
+
+        const clock = new THREE.Clock();
+        let angle = 0;
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const t = clock.getElapsedTime();
+            angle += 0.0005;
+            camera.position.x = Math.cos(angle) * 22;
+            camera.position.z = Math.sin(angle) * 22;
+            camera.position.y = 10 + Math.sin(t * 0.06) * 1.5;
+            camera.lookAt(0, 3, 0);
+
+            prism.position.y = Math.sin(t * 0.3) * 0.1;
+            prism.children[prism.children.length - 1].position.y = 3 + Math.sin(t * 0.8) * 0.3;
+
+            connections.forEach(c => {
+                c.mesh.position.y = c.basePos.y + Math.sin(t * 0.6 + c.phase) * 0.2;
+            });
+
+            particles.forEach(p => {
+                p.mesh.position.y += p.vy * 0.2;
+                p.mesh.rotation.x += 0.003;
+                if (p.mesh.position.y > 14) {
+                    p.mesh.position.y = -1;
+                    p.mesh.position.x = (Math.random() - 0.5) * 18;
+                    p.mesh.position.z = (Math.random() - 0.5) * 18;
+                }
+            });
+
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>

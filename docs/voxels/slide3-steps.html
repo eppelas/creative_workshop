@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { margin: 0; overflow: hidden; background: #FFFFFF; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+    <script type="module">
+        import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xFFFFFF);
+
+        const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 500);
+        camera.position.set(16, 12, 20);
+        camera.lookAt(0, 3, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        const BLACK = 0x171717;
+        const RED = 0xDC2626;
+        const GRAY = 0xD4D4D4;
+        const MUTED = 0x737373;
+
+        const vGeo = new THREE.BoxGeometry(1, 1, 1);
+
+        // 5 platforms: W1, W2, W3, W4 (active), Demo Day (upcoming)
+        const platforms = [
+            { x: -8, h: 2, w: 3, d: 3, color: MUTED, label: 'done' },
+            { x: -4, h: 4, w: 3, d: 3, color: MUTED, label: 'done' },
+            { x: 0, h: 6, w: 3, d: 3, color: MUTED, label: 'done' },
+            { x: 4, h: 8, w: 3, d: 3, color: RED, label: 'active' },
+            { x: 8, h: 10, w: 3, d: 3, color: GRAY, label: 'upcoming' },
+        ];
+
+        const platformGroups = [];
+
+        platforms.forEach((p, idx) => {
+            const group = new THREE.Group();
+            const isActive = p.label === 'active';
+            const isUpcoming = p.label === 'upcoming';
+
+            for (let x = 0; x < p.w; x++) {
+                for (let z = 0; z < p.d; z++) {
+                    for (let y = 0; y < p.h; y++) {
+                        // Only build shell for done platforms (hollow inside)
+                        const isShell = x === 0 || x === p.w - 1 || z === 0 || z === p.d - 1 || y === 0 || y === p.h - 1;
+                        if (!isShell && !isActive) continue;
+
+                        if (isUpcoming) {
+                            // Wireframe for upcoming
+                            const edges = new THREE.EdgesGeometry(vGeo);
+                            const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({
+                                color: GRAY, transparent: true, opacity: 0.4
+                            }));
+                            line.position.set(p.x + x, y, z);
+                            group.add(line);
+                        } else {
+                            let color = p.color;
+                            if (isActive && y === p.h - 1) color = RED;
+                            else if (isActive) color = (y % 2 === 0) ? BLACK : 0x2A2A2A;
+
+                            const mat = new THREE.MeshStandardMaterial({
+                                color, roughness: isActive ? 0.4 : 0.8, metalness: isActive ? 0.2 : 0.05
+                            });
+                            const m = new THREE.Mesh(vGeo, mat);
+                            m.position.set(p.x + x, y, z);
+                            m.castShadow = true;
+                            m.receiveShadow = true;
+                            group.add(m);
+                        }
+                    }
+                }
+            }
+
+            // Number on top
+            if (!isUpcoming) {
+                const numMat = new THREE.MeshStandardMaterial({ color: isActive ? 0xFFFFFF : BLACK, roughness: 0.5 });
+                const numBlock = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.3, 0.6), numMat);
+                numBlock.position.set(p.x + 1, p.h + 0.15, 1);
+                group.add(numBlock);
+            }
+
+            scene.add(group);
+            platformGroups.push({ group, config: p });
+        });
+
+        // Connecting lines between platforms
+        const connMat = new THREE.LineBasicMaterial({ color: RED, transparent: true, opacity: 0.5 });
+        for (let i = 0; i < platforms.length - 1; i++) {
+            const p1 = platforms[i];
+            const p2 = platforms[i + 1];
+            const pts = [
+                new THREE.Vector3(p1.x + 1.5, p1.h, 1.5),
+                new THREE.Vector3(p2.x + 1.5, p2.h, 1.5)
+            ];
+            const g = new THREE.BufferGeometry().setFromPoints(pts);
+            scene.add(new THREE.Line(g, connMat));
+        }
+
+        // Particles rising from active platform
+        const activeP = platforms[3];
+        const particleCount = 30;
+        const pGeo = new THREE.BoxGeometry(0.2, 0.2, 0.2);
+        const pMat = new THREE.MeshStandardMaterial({ color: RED, roughness: 0.3 });
+        const particles = [];
+        for (let i = 0; i < particleCount; i++) {
+            const m = new THREE.Mesh(pGeo, pMat);
+            m.position.set(
+                activeP.x + 1 + (Math.random() - 0.5) * 3,
+                activeP.h + Math.random() * 5,
+                1 + (Math.random() - 0.5) * 3
+            );
+            scene.add(m);
+            particles.push({ mesh: m, vy: 0.015 + Math.random() * 0.02, baseY: activeP.h });
+        }
+
+        // No ground plane — pure white background
+
+        // Lighting
+        scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+        const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+        sun.position.set(10, 25, 10);
+        sun.castShadow = true;
+        sun.shadow.mapSize.set(1024, 1024);
+        sun.shadow.camera.far = 60;
+        sun.shadow.camera.left = -20;
+        sun.shadow.camera.right = 20;
+        sun.shadow.camera.top = 20;
+        sun.shadow.camera.bottom = -20;
+        scene.add(sun);
+        const fill = new THREE.DirectionalLight(0xE0E8FF, 0.3);
+        fill.position.set(-10, 10, -5);
+        scene.add(fill);
+
+        const clock = new THREE.Clock();
+        let camAngle = 0.3;
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const t = clock.getElapsedTime();
+
+            // Slow orbit (5x slower)
+            camAngle += 0.0004;
+            camera.position.x = Math.cos(camAngle) * 22;
+            camera.position.z = Math.sin(camAngle) * 22;
+            camera.position.y = 12 + Math.sin(t * 0.06) * 1;
+            camera.lookAt(0, 4, 0);
+
+            // Active platform pulse (5x slower)
+            platformGroups[3].group.position.y = Math.sin(t * 0.4) * 0.15;
+
+            // Particles (5x slower)
+            particles.forEach(p => {
+                p.mesh.position.y += p.vy * 0.2;
+                p.mesh.rotation.x += 0.006;
+                p.mesh.rotation.z += 0.004;
+                if (p.mesh.position.y > p.baseY + 8) {
+                    p.mesh.position.y = p.baseY;
+                    p.mesh.position.x = activeP.x + 1 + (Math.random() - 0.5) * 3;
+                    p.mesh.position.z = 1 + (Math.random() - 0.5) * 3;
+                }
+            });
+
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>

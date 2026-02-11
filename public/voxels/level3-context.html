@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { margin: 0; overflow: hidden; background: #FFFFFF; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+    <script type="module">
+        import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xFFFFFF);
+
+        const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 500);
+        camera.position.set(16, 14, 18);
+        camera.lookAt(0, 4, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        const RED = 0xDC2626;
+        const BLACK = 0x171717;
+        const GRAY = 0xD4D4D4;
+        const MUTED = 0x737373;
+
+        const blackMat = new THREE.MeshStandardMaterial({ color: BLACK, roughness: 0.8, metalness: 0.1 });
+        const redMat = new THREE.MeshStandardMaterial({ color: RED, roughness: 0.4, metalness: 0.2 });
+        const grayMat = new THREE.MeshStandardMaterial({ color: GRAY, roughness: 0.9, metalness: 0.05 });
+        const mutedMat = new THREE.MeshStandardMaterial({ color: MUTED, roughness: 0.7, metalness: 0.1 });
+
+        const vGeo = new THREE.BoxGeometry(1, 1, 1);
+
+        // Brain / Library — books stacked as knowledge, with a glowing core
+        // Bookshelves in a circle
+        const shelves = [];
+        const shelfPositions = [
+            { x: -4, z: -2 }, { x: -4, z: 0 }, { x: -4, z: 2 },
+            { x: 4, z: -2 }, { x: 4, z: 0 }, { x: 4, z: 2 },
+            { x: -2, z: -4 }, { x: 0, z: -4 }, { x: 2, z: -4 },
+        ];
+
+        shelfPositions.forEach((sp, idx) => {
+            const h = 3 + Math.floor(Math.random() * 4);
+            for (let y = 0; y < h; y++) {
+                const mat = y === h - 1 ? (idx % 3 === 0 ? redMat : mutedMat) : grayMat;
+                const m = new THREE.Mesh(vGeo, mat);
+                m.position.set(sp.x, y, sp.z);
+                m.castShadow = true;
+                scene.add(m);
+                shelves.push({ mesh: m, baseY: y, phase: idx * 0.5 + y * 0.3 });
+            }
+        });
+
+        // Central brain core — floating red cluster
+        const core = new THREE.Group();
+        const corePositions = [
+            [0,4,0], [1,4,0], [-1,4,0], [0,4,1], [0,4,-1],
+            [0,5,0], [1,5,0], [-1,5,0], [0,5,1], [0,5,-1],
+            [0,6,0], [0.5,6,0.5], [-0.5,6,-0.5],
+            [0,7,0],
+        ];
+        corePositions.forEach(([x,y,z]) => {
+            const m = new THREE.Mesh(vGeo, redMat);
+            m.position.set(x, y, z);
+            m.castShadow = true;
+            core.add(m);
+        });
+        scene.add(core);
+
+        // Data streams — small voxels flowing upward into the core
+        const streams = [];
+        const streamGeo = new THREE.BoxGeometry(0.25, 0.25, 0.25);
+        for (let i = 0; i < 50; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 2 + Math.random() * 5;
+            const m = new THREE.Mesh(streamGeo, i % 4 === 0 ? redMat : mutedMat);
+            m.position.set(Math.cos(angle) * dist, Math.random() * -2, Math.sin(angle) * dist);
+            scene.add(m);
+            streams.push({
+                mesh: m,
+                angle,
+                dist,
+                speed: 0.02 + Math.random() * 0.03,
+                phase: Math.random() * Math.PI * 2,
+            });
+        }
+
+        // Lighting
+        scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+        const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+        sun.position.set(10, 20, 10);
+        sun.castShadow = true;
+        sun.shadow.mapSize.set(1024, 1024);
+        scene.add(sun);
+        const fill = new THREE.DirectionalLight(0xDCE8FF, 0.4);
+        fill.position.set(-10, 10, -5);
+        scene.add(fill);
+
+        // Red point light in the core
+        const coreLight = new THREE.PointLight(RED, 0.5, 12);
+        coreLight.position.set(0, 5, 0);
+        scene.add(coreLight);
+
+        const clock = new THREE.Clock();
+        let angle = 0;
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const t = clock.getElapsedTime();
+            angle += 0.0005;
+            camera.position.x = Math.cos(angle) * 22;
+            camera.position.z = Math.sin(angle) * 22;
+            camera.position.y = 14 + Math.sin(t * 0.07) * 1;
+            camera.lookAt(0, 4, 0);
+
+            // Core breathing
+            core.position.y = Math.sin(t * 0.3) * 0.2;
+            core.rotation.y = t * 0.05;
+            coreLight.intensity = 0.4 + Math.sin(t * 0.8) * 0.2;
+
+            // Streams flow upward and spiral toward core
+            streams.forEach(s => {
+                s.mesh.position.y += s.speed;
+                const spiralAngle = s.angle + t * 0.1;
+                const shrink = Math.max(0.5, s.dist - s.mesh.position.y * 0.3);
+                s.mesh.position.x = Math.cos(spiralAngle) * shrink;
+                s.mesh.position.z = Math.sin(spiralAngle) * shrink;
+                s.mesh.rotation.x += 0.01;
+                if (s.mesh.position.y > 8) {
+                    s.mesh.position.y = -2;
+                    s.angle = Math.random() * Math.PI * 2;
+                    s.dist = 2 + Math.random() * 5;
+                }
+            });
+
+            // Subtle shelf breathing
+            shelves.forEach(s => {
+                s.mesh.position.y = s.baseY + Math.sin(t * 0.2 + s.phase) * 0.02;
+            });
+
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>

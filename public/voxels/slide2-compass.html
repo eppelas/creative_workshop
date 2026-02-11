@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { margin: 0; overflow: hidden; background: #FFFFFF; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+    <script type="module">
+        import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xFFFFFF);
+
+        const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 500);
+        camera.position.set(0, 14, 18);
+        camera.lookAt(0, 0, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        const BLACK = 0x171717;
+        const RED = 0xDC2626;
+        const GRAY = 0xD4D4D4;
+
+        const blackMat = new THREE.MeshStandardMaterial({ color: BLACK, roughness: 0.7 });
+        const redMat = new THREE.MeshStandardMaterial({ color: RED, roughness: 0.3, metalness: 0.2 });
+        const grayMat = new THREE.MeshStandardMaterial({ color: GRAY, roughness: 0.9 });
+
+        const vGeo = new THREE.BoxGeometry(1, 1, 1);
+
+        // Compass rose — 8 arms radiating from center
+        const compass = new THREE.Group();
+
+        // Center core (red)
+        for (let x = -1; x <= 1; x++) {
+            for (let z = -1; z <= 1; z++) {
+                const m = new THREE.Mesh(vGeo, redMat);
+                m.position.set(x, 0, z);
+                m.castShadow = true;
+                compass.add(m);
+            }
+        }
+        // Second layer
+        const m2 = new THREE.Mesh(vGeo, redMat);
+        m2.position.set(0, 1, 0);
+        m2.castShadow = true;
+        compass.add(m2);
+
+        // 8 arms — cardinal + diagonal
+        const directions = [
+            { dx: 1, dz: 0 }, { dx: -1, dz: 0 },
+            { dx: 0, dz: 1 }, { dx: 0, dz: -1 },
+            { dx: 1, dz: 1 }, { dx: -1, dz: -1 },
+            { dx: 1, dz: -1 }, { dx: -1, dz: 1 },
+        ];
+
+        const armLengths = [6, 6, 6, 6, 4, 4, 4, 4]; // Cardinal longer
+
+        directions.forEach((dir, idx) => {
+            const len = armLengths[idx];
+            const isCardinal = idx < 4;
+            for (let i = 2; i <= len; i++) {
+                const mat = (i === len) ? redMat : (isCardinal ? blackMat : grayMat);
+                const m = new THREE.Mesh(vGeo, mat);
+                m.position.set(dir.dx * i, 0, dir.dz * i);
+                m.castShadow = true;
+                compass.add(m);
+
+                // Add height at tips
+                if (i === len) {
+                    const tip = new THREE.Mesh(vGeo, redMat);
+                    tip.position.set(dir.dx * i, 1, dir.dz * i);
+                    tip.castShadow = true;
+                    compass.add(tip);
+                }
+            }
+        });
+
+        scene.add(compass);
+
+        // Orbiting indicator dots (8 small cubes orbiting at different heights)
+        const orbiters = [];
+        for (let i = 0; i < 8; i++) {
+            const angle = (i / 8) * Math.PI * 2;
+            const radius = 9 + Math.random() * 2;
+            const height = 2 + Math.random() * 3;
+            const m = new THREE.Mesh(
+                new THREE.BoxGeometry(0.4, 0.4, 0.4),
+                i % 3 === 0 ? redMat : new THREE.MeshStandardMaterial({ color: 0x999999, roughness: 0.5 })
+            );
+            scene.add(m);
+            orbiters.push({ mesh: m, angle, radius, height, speed: 0.3 + Math.random() * 0.3 });
+        }
+
+        // No ground plane — pure white background
+
+        // Lighting
+        scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+        const sun = new THREE.DirectionalLight(0xffffff, 1.0);
+        sun.position.set(8, 20, 8);
+        sun.castShadow = true;
+        sun.shadow.mapSize.set(1024, 1024);
+        sun.shadow.camera.far = 50;
+        sun.shadow.camera.left = -15;
+        sun.shadow.camera.right = 15;
+        sun.shadow.camera.top = 15;
+        sun.shadow.camera.bottom = -15;
+        scene.add(sun);
+        scene.add(new THREE.DirectionalLight(0xE8E0FF, 0.3).translateZ(-10));
+
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const t = clock.getElapsedTime();
+
+            // Slow compass rotation (5x slower)
+            compass.rotation.y = t * 0.03;
+            compass.position.y = Math.sin(t * 0.16) * 0.3;
+
+            // Orbiters (5x slower)
+            orbiters.forEach(o => {
+                o.angle += o.speed * 0.002;
+                o.mesh.position.x = Math.cos(o.angle) * o.radius;
+                o.mesh.position.z = Math.sin(o.angle) * o.radius;
+                o.mesh.position.y = o.height + Math.sin(t * 0.3 + o.angle) * 0.5;
+                o.mesh.rotation.x += 0.004;
+                o.mesh.rotation.y += 0.006;
+            });
+
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { margin: 0; overflow: hidden; background: #FFFFFF; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+    <script type="module">
+        import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xFFFFFF);
+
+        const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 500);
+        camera.position.set(0, 12, 28);
+        camera.lookAt(0, 4, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        // Colorful palette — a whole world, not just red/black
+        const PALETTE = {
+            coral:    0xFF6B6B,
+            amber:    0xFFB347,
+            gold:     0xFFD93D,
+            mint:     0x6BCB77,
+            teal:     0x4ECDC4,
+            sky:      0x45B7D1,
+            indigo:   0x6C5CE7,
+            violet:   0xA55EEA,
+            rose:     0xFD79A8,
+            warm:     0xFAB1A0,
+            sand:     0xF8E9A1,
+            deep:     0x2D3436,
+        };
+
+        const palKeys = Object.keys(PALETTE);
+        const vGeo = new THREE.BoxGeometry(1, 1, 1);
+
+        function mat(color, emissive = false) {
+            return new THREE.MeshStandardMaterial({
+                color,
+                roughness: emissive ? 0.3 : 0.6,
+                metalness: emissive ? 0.1 : 0.05,
+                ...(emissive ? { emissive: color, emissiveIntensity: 0.15 } : {})
+            });
+        }
+
+        // --- Floating Islands (different colored biomes) ---
+        const islands = [];
+
+        function createIsland(cx, cy, cz, radius, height, colorA, colorB) {
+            const group = new THREE.Group();
+            const matA = mat(colorA, true);
+            const matB = mat(colorB);
+            const darkMat = mat(0x5C4033);
+
+            for (let x = -radius; x <= radius; x++) {
+                for (let z = -radius; z <= radius; z++) {
+                    const dist = Math.sqrt(x * x + z * z);
+                    if (dist > radius) continue;
+
+                    // Surface
+                    const surfaceY = Math.floor(Math.sin(x * 0.5) * Math.cos(z * 0.5) * 1.5);
+                    const useMat = Math.random() > 0.4 ? matA : matB;
+                    const m = new THREE.Mesh(vGeo, useMat);
+                    m.position.set(x, surfaceY, z);
+                    m.castShadow = true;
+                    group.add(m);
+
+                    // Underside (darker, tapering)
+                    const depth = Math.max(1, Math.floor((radius - dist) * 0.8));
+                    for (let y = 1; y <= depth; y++) {
+                        const dm = new THREE.Mesh(vGeo, darkMat);
+                        dm.position.set(x, surfaceY - y, z);
+                        group.add(dm);
+                    }
+                }
+            }
+
+            // Trees or crystals on top
+            const structures = 2 + Math.floor(Math.random() * 3);
+            for (let i = 0; i < structures; i++) {
+                const sx = (Math.random() - 0.5) * radius * 1.2;
+                const sz = (Math.random() - 0.5) * radius * 1.2;
+                const sh = 2 + Math.floor(Math.random() * 4);
+                const sMat = mat(Math.random() > 0.5 ? colorA : colorB, true);
+                for (let y = 0; y < sh; y++) {
+                    const sm = new THREE.Mesh(vGeo, sMat);
+                    sm.position.set(Math.round(sx), y + 1, Math.round(sz));
+                    sm.castShadow = true;
+                    group.add(sm);
+                }
+                // Crown
+                const crownMat = mat(PALETTE[palKeys[Math.floor(Math.random() * palKeys.length)]], true);
+                for (let dx = -1; dx <= 1; dx++) {
+                    for (let dz = -1; dz <= 1; dz++) {
+                        if (Math.random() > 0.4) {
+                            const cm = new THREE.Mesh(vGeo, crownMat);
+                            cm.position.set(Math.round(sx) + dx, sh + 1, Math.round(sz) + dz);
+                            cm.castShadow = true;
+                            group.add(cm);
+                        }
+                    }
+                }
+            }
+
+            group.position.set(cx, cy, cz);
+            scene.add(group);
+            islands.push({ group, baseY: cy, speed: 0.1 + Math.random() * 0.1, phase: Math.random() * Math.PI * 2 });
+        }
+
+        // Main island (center)
+        createIsland(0, 0, 0, 5, 3, PALETTE.mint, PALETTE.teal);
+        // Coral island (left)
+        createIsland(-10, 2, -4, 3, 2, PALETTE.coral, PALETTE.rose);
+        // Golden island (right)
+        createIsland(9, -1, 3, 3, 2, PALETTE.gold, PALETTE.amber);
+        // Sky island (top)
+        createIsland(3, 6, -8, 2, 1, PALETTE.sky, PALETTE.indigo);
+        // Violet island (far)
+        createIsland(-6, 4, 6, 2, 1, PALETTE.violet, PALETTE.warm);
+
+        // --- Connecting bridges (thin lines of voxels between islands) ---
+        function createBridge(from, to, color) {
+            const bridgeMat = mat(color);
+            const steps = 8;
+            for (let i = 0; i <= steps; i++) {
+                const t = i / steps;
+                const x = from[0] + (to[0] - from[0]) * t;
+                const y = from[1] + (to[1] - from[1]) * t + Math.sin(t * Math.PI) * 2;
+                const z = from[2] + (to[2] - from[2]) * t;
+                const m = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.3, 0.5), bridgeMat);
+                m.position.set(x, y, z);
+                scene.add(m);
+            }
+        }
+
+        createBridge([0, 0, 0], [-10, 2, -4], PALETTE.warm);
+        createBridge([0, 0, 0], [9, -1, 3], PALETTE.sand);
+        createBridge([0, 0, 0], [3, 6, -8], PALETTE.sky);
+
+        // --- Floating particles (colorful, ambient) ---
+        const particleCount = 60;
+        const particles = [];
+        for (let i = 0; i < particleCount; i++) {
+            const col = PALETTE[palKeys[Math.floor(Math.random() * palKeys.length)]];
+            const size = 0.15 + Math.random() * 0.2;
+            const pMat = mat(col, true);
+            const m = new THREE.Mesh(new THREE.BoxGeometry(size, size, size), pMat);
+            m.position.set(
+                (Math.random() - 0.5) * 30,
+                Math.random() * 15 - 3,
+                (Math.random() - 0.5) * 25
+            );
+            scene.add(m);
+            particles.push({
+                mesh: m,
+                vy: 0.002 + Math.random() * 0.004,
+                vx: (Math.random() - 0.5) * 0.003,
+                vz: (Math.random() - 0.5) * 0.003,
+                rotSpeed: (Math.random() - 0.5) * 0.01
+            });
+        }
+
+        // --- Lighting ---
+        scene.add(new THREE.AmbientLight(0xffffff, 0.65));
+
+        const sun = new THREE.DirectionalLight(0xFFF5E1, 1.0);
+        sun.position.set(12, 25, 10);
+        sun.castShadow = true;
+        sun.shadow.mapSize.set(1024, 1024);
+        sun.shadow.camera.far = 60;
+        sun.shadow.camera.left = -20;
+        sun.shadow.camera.right = 20;
+        sun.shadow.camera.top = 20;
+        sun.shadow.camera.bottom = -20;
+        scene.add(sun);
+
+        const fill = new THREE.DirectionalLight(0xE0D0FF, 0.3);
+        fill.position.set(-10, 10, -8);
+        scene.add(fill);
+
+        const warmFill = new THREE.PointLight(PALETTE.coral, 0.4, 30);
+        warmFill.position.set(-8, 5, 0);
+        scene.add(warmFill);
+
+        const coolFill = new THREE.PointLight(PALETTE.sky, 0.3, 30);
+        coolFill.position.set(8, 3, -5);
+        scene.add(coolFill);
+
+        // --- Animation ---
+        const clock = new THREE.Clock();
+        let camAngle = 0;
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const t = clock.getElapsedTime();
+
+            // Very slow camera orbit
+            camAngle += 0.0004;
+            camera.position.x = Math.cos(camAngle) * 26;
+            camera.position.z = Math.sin(camAngle) * 26;
+            camera.position.y = 12 + Math.sin(t * 0.05) * 2;
+            camera.lookAt(0, 3, 0);
+
+            // Float islands gently
+            islands.forEach(isl => {
+                isl.group.position.y = isl.baseY + Math.sin(t * isl.speed + isl.phase) * 0.4;
+            });
+
+            // Particles drift slowly
+            particles.forEach(p => {
+                p.mesh.position.y += p.vy;
+                p.mesh.position.x += p.vx;
+                p.mesh.position.z += p.vz;
+                p.mesh.rotation.x += p.rotSpeed;
+                p.mesh.rotation.z += p.rotSpeed * 0.7;
+
+                if (p.mesh.position.y > 14) {
+                    p.mesh.position.y = -3;
+                    p.mesh.position.x = (Math.random() - 0.5) * 30;
+                    p.mesh.position.z = (Math.random() - 0.5) * 25;
+                }
+            });
+
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>

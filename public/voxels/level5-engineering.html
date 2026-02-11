@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { margin: 0; overflow: hidden; background: #FFFFFF; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+    <script type="module">
+        import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xFFFFFF);
+
+        const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 500);
+        camera.position.set(18, 12, 18);
+        camera.lookAt(0, 4, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        const RED = 0xDC2626;
+        const BLACK = 0x171717;
+        const GRAY = 0xD4D4D4;
+        const MUTED = 0x737373;
+
+        const blackMat = new THREE.MeshStandardMaterial({ color: BLACK, roughness: 0.8, metalness: 0.1 });
+        const redMat = new THREE.MeshStandardMaterial({ color: RED, roughness: 0.4, metalness: 0.2 });
+        const grayMat = new THREE.MeshStandardMaterial({ color: GRAY, roughness: 0.9, metalness: 0.05 });
+        const mutedMat = new THREE.MeshStandardMaterial({ color: MUTED, roughness: 0.7, metalness: 0.1 });
+
+        const vGeo = new THREE.BoxGeometry(1, 1, 1);
+
+        // Orbital system — central architect figure with orbiting tool-satellites
+        // Central figure (the architect)
+        const figure = new THREE.Group();
+        function addV(x, y, z, mat = blackMat) {
+            const m = new THREE.Mesh(vGeo, mat);
+            m.position.set(x, y, z);
+            m.castShadow = true;
+            figure.add(m);
+        }
+        // Legs
+        addV(-0.5, 0, 0); addV(-0.5, 1, 0);
+        addV(0.5, 0, 0); addV(0.5, 1, 0);
+        // Torso
+        addV(0, 2, 0); addV(0, 3, 0); addV(0, 4, 0);
+        // Shoulders + arms reaching out
+        addV(-1, 4, 0); addV(1, 4, 0);
+        addV(-2, 4, 0, redMat); addV(2, 4, 0, redMat);
+        addV(-2, 3, 0.5); addV(2, 3, 0.5);
+        // Head
+        addV(0, 5, 0); addV(0, 6, 0, redMat);
+        scene.add(figure);
+
+        // Orbiting satellites — represent tools/systems the architect controls
+        const orbits = [];
+        const orbitData = [
+            { radius: 5, speed: 0.3, y: 3, size: 1.2, mat: redMat },
+            { radius: 7, speed: -0.2, y: 5, size: 0.8, mat: grayMat },
+            { radius: 6, speed: 0.15, y: 1, size: 1.0, mat: mutedMat },
+            { radius: 8, speed: -0.1, y: 6, size: 0.6, mat: redMat },
+            { radius: 4, speed: 0.4, y: 7, size: 0.7, mat: blackMat },
+            { radius: 9, speed: 0.08, y: 2, size: 0.9, mat: grayMat },
+        ];
+        orbitData.forEach(od => {
+            // Each satellite is a small cluster
+            const sat = new THREE.Group();
+            const s = od.size;
+            const geo = new THREE.BoxGeometry(s, s, s);
+            const m1 = new THREE.Mesh(geo, od.mat); m1.castShadow = true; sat.add(m1);
+            const m2 = new THREE.Mesh(new THREE.BoxGeometry(s*0.6, s*0.6, s*0.6), od.mat === redMat ? blackMat : redMat);
+            m2.position.set(s * 0.8, 0, 0); m2.castShadow = true; sat.add(m2);
+            scene.add(sat);
+            orbits.push({ group: sat, radius: od.radius, speed: od.speed, y: od.y, phase: Math.random() * Math.PI * 2 });
+        });
+
+        // Connection lines — thin voxels from figure to satellites
+        const connGeo = new THREE.BoxGeometry(0.15, 0.15, 0.15);
+        const connMat = new THREE.MeshStandardMaterial({ color: RED, roughness: 0.3, transparent: true, opacity: 0.4 });
+        const connections = [];
+        for (let i = 0; i < 80; i++) {
+            const m = new THREE.Mesh(connGeo, connMat);
+            scene.add(m);
+            connections.push({ mesh: m, orbitIdx: i % orbitData.length, t: i / 80 });
+        }
+
+        // Orbit rings (visual guides)
+        orbitData.forEach(od => {
+            const ringGeo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+            const ringMat = new THREE.MeshStandardMaterial({ color: GRAY, transparent: true, opacity: 0.15 });
+            for (let a = 0; a < Math.PI * 2; a += 0.15) {
+                const m = new THREE.Mesh(ringGeo, ringMat);
+                m.position.set(Math.cos(a) * od.radius, od.y, Math.sin(a) * od.radius);
+                scene.add(m);
+            }
+        });
+
+        // Particles
+        const particles = [];
+        const pGeo = new THREE.BoxGeometry(0.12, 0.12, 0.12);
+        for (let i = 0; i < 40; i++) {
+            const p = new THREE.Mesh(pGeo, i % 3 === 0 ? redMat : mutedMat);
+            p.position.set((Math.random() - 0.5) * 20, Math.random() * 12, (Math.random() - 0.5) * 20);
+            scene.add(p);
+            particles.push({ mesh: p, vy: 0.006 + Math.random() * 0.01 });
+        }
+
+        // Lighting
+        scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+        const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+        sun.position.set(10, 20, 10);
+        sun.castShadow = true;
+        sun.shadow.mapSize.set(1024, 1024);
+        scene.add(sun);
+        const coreLight = new THREE.PointLight(RED, 0.3, 15);
+        coreLight.position.set(0, 4, 0);
+        scene.add(coreLight);
+
+        const clock = new THREE.Clock();
+        let camAngle = 0;
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const t = clock.getElapsedTime();
+            camAngle += 0.0004;
+            camera.position.x = Math.cos(camAngle) * 22;
+            camera.position.z = Math.sin(camAngle) * 22;
+            camera.position.y = 12 + Math.sin(t * 0.05) * 2;
+            camera.lookAt(0, 4, 0);
+
+            // Figure breathing
+            figure.position.y = Math.sin(t * 0.25) * 0.1;
+
+            // Orbits
+            orbits.forEach(o => {
+                const a = t * o.speed + o.phase;
+                o.group.position.set(Math.cos(a) * o.radius, o.y + Math.sin(t * 0.3 + o.phase) * 0.3, Math.sin(a) * o.radius);
+                o.group.rotation.y = a;
+            });
+
+            // Connections follow satellites
+            connections.forEach(c => {
+                const o = orbits[c.orbitIdx];
+                const satPos = o.group.position;
+                c.mesh.position.lerpVectors(new THREE.Vector3(0, 4, 0), satPos, c.t);
+                c.mesh.position.y += Math.sin(t * 0.5 + c.t * 5) * 0.1;
+            });
+
+            particles.forEach(p => {
+                p.mesh.position.y += p.vy * 0.2;
+                p.mesh.rotation.x += 0.002;
+                if (p.mesh.position.y > 14) {
+                    p.mesh.position.y = -1;
+                    p.mesh.position.x = (Math.random() - 0.5) * 20;
+                    p.mesh.position.z = (Math.random() - 0.5) * 20;
+                }
+            });
+
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
